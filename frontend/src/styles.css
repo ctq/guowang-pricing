@@ -1,0 +1,174 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #eef2f5;
+  color: #1f2933;
+  font-family: Inter, "Microsoft YaHei", Arial, sans-serif;
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding: 18px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 0 2px 14px;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+h1 {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+h2 {
+  font-size: 16px;
+}
+
+.topbar p,
+.section-head span {
+  margin-top: 4px;
+  color: #66727f;
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(420px, 1fr) minmax(460px, 1.1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.panel {
+  background: #fff;
+  border: 1px solid #d9e1e8;
+  border-radius: 8px;
+  padding: 14px;
+  min-width: 0;
+}
+
+.side-panel {
+  min-height: 604px;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  margin-bottom: 10px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.mapping-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.compact-form .el-form-item {
+  margin-bottom: 12px;
+}
+
+.param-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  color: #334155;
+  font-weight: 600;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.metrics div {
+  border: 1px solid #e1e8ee;
+  border-radius: 6px;
+  padding: 10px;
+  min-height: 64px;
+  background: #f8fafc;
+}
+
+.metrics span {
+  display: block;
+  color: #66727f;
+  font-size: 12px;
+}
+
+.metrics strong {
+  display: block;
+  margin-top: 7px;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1320px) {
+  .workspace {
+    grid-template-columns: 320px 1fr;
+  }
+
+  .result-panel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 860px) {
+  .app-shell {
+    padding: 12px;
+  }
+
+  .topbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .actions {
+    flex-wrap: wrap;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid,
+  .mapping-grid,
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+}

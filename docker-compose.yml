@@ -1,0 +1,21 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "127.0.0.1:8002:8000"
+    environment:
+      GUOWANG_DB_PATH: /app/data/guowang.sqlite3
+    volumes:
+      - backend-data:/app/data
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5174:80"
+    depends_on:
+      - backend
+
+volumes:
+  backend-data:
