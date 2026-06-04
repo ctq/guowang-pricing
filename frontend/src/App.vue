@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { DocumentCopy, Download, Plus, Refresh, Upload } from '@element-plus/icons-vue'
+import { DataLine, DocumentCopy, Download, Finished, Plus, Refresh, Upload } from '@element-plus/icons-vue'
 import { ElMessage, type UploadProps } from 'element-plus'
 import { calculate, exportXlsx, fetchMethods, importXlsx } from './api/pricing'
 import { useCalculatorStore } from './stores/calculator'
@@ -15,6 +15,7 @@ const mappingColumns = ref<string[]>([])
 const mappingPreview = ref<Record<string, string>[]>([])
 const bidderColumn = ref('')
 const priceColumn = ref('')
+const a01FloatingType = ref('')
 
 const provinces = [
   '北京', '天津', '河北', '山西', '内蒙古', '辽宁', '吉林', '黑龙江', '上海', '江苏', '浙江', '安徽',
@@ -25,30 +26,97 @@ const provinces = [
 const resultRows = computed(() => {
   const rows = store.result?.rows ?? []
   return [...rows].sort((a, b) => {
-    if (a.rank === null && b.rank === null) {
-      return 0
-    }
-    if (a.rank === null) {
-      return 1
-    }
-    if (b.rank === null) {
-      return -1
-    }
+    if (a.rank === null && b.rank === null) return 0
+    if (a.rank === null) return 1
+    if (b.rank === null) return -1
     return a.rank - b.rank
   })
 })
-const methodName = computed(() => store.selectedMethod ? `${store.selectedMethod.code} ${store.selectedMethod.name}` : '')
 const benchmarkDiscountRate = computed(() => formatPercent(store.result?.discount_rate))
+const benchmarkDiscountValue = computed(() => benchmarkDiscountRate.value === '-' ? '-' : benchmarkDiscountRate.value.replace('%', ''))
+const benchmarkFormulaByMethod: Record<string, string> = {
+  A01: '',
+  A02: 'A1 * (1 + c)',
+  A03: '所选平均值 * (1 + c)',
+  A04: '(A2 + 次低价) / 2',
+  A05: '最低有效报价',
+  A06: '全部有效报价平均值',
+  A07: 'A2 * (1 - a)',
+  A08: 'A2 * (1 + c)',
+}
+const fixedBenchmarkFormula = computed(() => benchmarkFormulaByMethod[store.methodCode] ?? '')
+const resultTableRows = computed(() => {
+  if (store.result) return resultRows.value
+  return store.bids.map(row => ({
+    ...row,
+    score: null,
+    rank: null,
+    participated: Boolean(row.bid_price),
+    used_for_benchmark: false,
+    remark: '',
+  }))
+})
 
 function formatPercent(value: string | null | undefined) {
-  if (value === null || value === undefined || value === '') {
-    return '-'
-  }
+  if (value === null || value === undefined || value === '') return '-'
   const parsed = Number(value)
-  if (!Number.isFinite(parsed)) {
-    return value
-  }
+  if (!Number.isFinite(parsed)) return value
   return `${(parsed * 100).toFixed(2)}%`
+}
+
+function formatBidDiscount(value: string | null | undefined) {
+  if (!value || value === '不开标') return '-'
+  const ceiling = Number(store.project.ceiling_price)
+  const bid = Number(value)
+  if (!Number.isFinite(ceiling) || ceiling <= 0 || !Number.isFinite(bid)) return '-'
+  return ((bid / ceiling) * 100).toFixed(2)
+}
+
+function parameterLabel(key: string) {
+  return key === 'round_scale' ? '浮动类型' : key
+}
+
+function isFloatingTypeParam(key: string) {
+  return key === 'round_scale'
+}
+
+function payloadWithFloatingType(source = 'manual') {
+  const payload = store.payload(source)
+  if (store.methodCode === 'A01') {
+    payload.params.float_direction = a01FloatingType.value
+  }
+  return payload
+}
+
+function validateBeforeCalculate() {
+  const requiredProjectFields: Array<[string, string | undefined]> = [
+    ['网省', store.project.province],
+    ['目标公司', store.project.target_company],
+    ['包限价', store.project.ceiling_price],
+    ['价格分占比', store.project.price_weight],
+    ['评分规则', store.methodCode],
+  ]
+  const missingProjectField = requiredProjectFields.find(([, value]) => !String(value ?? '').trim())
+  if (missingProjectField) {
+    ElMessage.warning(`请填写${missingProjectField[0]}`)
+    return false
+  }
+
+  if (store.methodCode === 'A01' && !a01FloatingType.value) {
+    ElMessage.warning('请选择浮动类型')
+    return false
+  }
+
+  const missingParam = Object.entries(store.params).find(([key, value]) => {
+    if (isFloatingTypeParam(key)) return false
+    return !String(value ?? '').trim()
+  })
+  if (missingParam) {
+    ElMessage.warning(`请填写${parameterLabel(missingParam[0])}`)
+    return false
+  }
+
+  return true
 }
 
 onMounted(async () => {
@@ -59,6 +127,7 @@ onMounted(async () => {
 watch(() => store.methodCode, () => {
   store.applyDefaults()
   store.result = null
+  a01FloatingType.value = ''
 })
 
 function addBid() {
@@ -109,9 +178,11 @@ function applyPastedRows() {
 }
 
 async function runCalculate(source = 'manual') {
+  if (!validateBeforeCalculate()) return
   loading.value = true
   try {
-    store.result = await calculate(store.payload(source))
+    store.result = await calculate(payloadWithFloatingType(source))
+    ElMessage.success('计算成功')
   } catch (error) {
     ElMessage.error((error as { response?: { data?: { detail?: string } } }).response?.data?.detail ?? '计算失败')
   } finally {
@@ -120,8 +191,9 @@ async function runCalculate(source = 'manual') {
 }
 
 async function downloadResult() {
+  if (!validateBeforeCalculate()) return
   try {
-    await exportXlsx(store.payload())
+    await exportXlsx(payloadWithFloatingType())
   } catch {
     ElMessage.error('导出失败')
   }
@@ -147,173 +219,193 @@ const beforeUpload: UploadProps['beforeUpload'] = async (file) => {
   }
   return false
 }
+
+function rowClassName({ row }: { row: any }) {
+  if (store.project.target_company && row.bidder_name === store.project.target_company) {
+    return 'target-row'
+  }
+  return ''
+}
 </script>
 
 <template>
   <main class="app-shell">
-    <section class="topbar">
-      <div>
-        <h1>国网价格分在线测算系统</h1>
-        <p>{{ methodName }}</p>
-      </div>
-      <div class="actions">
-        <el-upload :show-file-list="false" accept=".xlsx" :before-upload="beforeUpload">
-          <el-button :icon="Upload">导入</el-button>
-        </el-upload>
-        <el-button :icon="Download" :disabled="!store.result" @click="downloadResult">导出</el-button>
-        <el-button type="primary" :loading="loading" @click="runCalculate()">计算</el-button>
-      </div>
-    </section>
+    <div class="workspace">
+      <aside class="wire-panel params-panel">
+        <h1>评标参数</h1>
+        <div class="import-row">
+          <el-upload :show-file-list="false" accept=".xlsx" :before-upload="beforeUpload">
+            <el-button class="btn-blue" :icon="Upload">导入开标记录</el-button>
+          </el-upload>
+        </div>
 
-    <section class="workspace">
-      <aside class="panel side-panel">
-        <el-tabs model-value="project" stretch>
-          <el-tab-pane label="项目" name="project">
-            <el-form label-position="top" class="compact-form">
-              <el-form-item label="招标编号"><el-input v-model="store.project.tender_no" /></el-form-item>
-              <el-form-item label="招标名称"><el-input v-model="store.project.tender_name" /></el-form-item>
-              <div class="form-grid">
-                <el-form-item label="分标编号"><el-input v-model="store.project.section_no" /></el-form-item>
-                <el-form-item label="包号"><el-input v-model="store.project.package_no" /></el-form-item>
-              </div>
-              <div class="form-grid">
-                <el-form-item label="省份">
-                  <el-select v-model="store.project.province" filterable>
-                    <el-option v-for="province in provinces" :key="province" :label="province" :value="province" />
-                  </el-select>
-                </el-form-item>
-                <el-form-item label="目标公司"><el-input v-model="store.project.target_company" /></el-form-item>
-              </div>
-              <div class="form-grid">
-                <el-form-item label="最高限价"><el-input v-model="store.project.ceiling_price" /></el-form-item>
-                <el-form-item label="价格分占比">
-                  <el-input v-model="store.project.price_weight">
-                    <template #append>%</template>
-                  </el-input>
-                </el-form-item>
-              </div>
-              <el-form-item label="评分方法">
-                <el-select v-model="store.methodCode" filterable>
-                  <el-option v-for="method in store.methods" :key="method.code" :label="`${method.code} ${method.name}`" :value="method.code" />
-                </el-select>
-              </el-form-item>
-            </el-form>
-          </el-tab-pane>
-          <el-tab-pane label="参数" name="params">
-            <div class="param-title">
-              <span>{{ store.selectedMethod?.name }}</span>
-              <el-button :icon="Refresh" text @click="store.applyDefaults()">默认值</el-button>
-            </div>
-            <el-form label-position="top" class="compact-form">
-              <el-form-item v-for="(_, key) in store.params" :key="key" :label="key">
-                <el-input v-model="store.params[key]">
-                  <template v-if="store.isPercentParam(String(key))" #append>%</template>
-                </el-input>
-              </el-form-item>
-            </el-form>
-          </el-tab-pane>
-        </el-tabs>
+        <el-form label-position="top" class="wire-form">
+          <div class="form-grid">
+            <el-form-item label="招标编号">
+              <el-input v-model="store.project.tender_no" />
+            </el-form-item>
+            <el-form-item label="网省">
+              <el-select v-model="store.project.province" filterable>
+                <el-option v-for="province in provinces" :key="province" :label="province" :value="province" />
+              </el-select>
+            </el-form-item>
+          </div>
+          <el-form-item label="招标名称">
+            <el-input v-model="store.project.tender_name" />
+          </el-form-item>
+          <el-form-item label="目标公司">
+            <el-input v-model="store.project.target_company" />
+          </el-form-item>
+          <div class="form-grid">
+            <el-form-item label="包限价">
+              <el-input v-model="store.project.ceiling_price" />
+            </el-form-item>
+            <el-form-item label="价格分占比">
+              <el-input v-model="store.project.price_weight" />
+            </el-form-item>
+          </div>
+          <el-form-item label="评分规则">
+            <el-select v-model="store.methodCode" filterable>
+              <el-option v-for="method in store.methods" :key="method.code" :label="`${method.code} ${method.name}`" :value="method.code" />
+            </el-select>
+          </el-form-item>
+
+          <div class="param-divider" />
+          <div class="form-grid param-grid">
+            <el-form-item v-for="(_, key) in store.params" :key="key" :label="parameterLabel(String(key))">
+              <el-select
+                v-if="store.methodCode === 'A01' && isFloatingTypeParam(String(key))"
+                v-model="a01FloatingType"
+                placeholder="请选择"
+              >
+                <el-option label="A2 * (1+c)" value="1" />
+                <el-option label="A2 * (1-c)" value="-1" />
+              </el-select>
+              <el-input
+                v-else-if="isFloatingTypeParam(String(key))"
+                :model-value="fixedBenchmarkFormula"
+                disabled
+              />
+              <el-input v-else v-model="store.params[key]" />
+            </el-form-item>
+          </div>
+          <el-button class="reset-button" :icon="Refresh" text @click="store.applyDefaults()">默认值</el-button>
+        </el-form>
       </aside>
 
-      <section class="panel data-panel">
-        <div class="section-head">
-          <div>
-            <h2>报价明细</h2>
-            <span>支持数字报价、空报价和“不开标”</span>
-          </div>
-          <div class="table-actions">
-            <el-button :icon="DocumentCopy" @click="pasteOpen = true">粘贴</el-button>
-            <el-button :icon="Plus" @click="addBid">新增</el-button>
-          </div>
-        </div>
-        <el-table :data="store.bids" height="430" border>
-          <el-table-column type="index" width="56" label="#" />
-          <el-table-column label="投标人名称" min-width="180">
-            <template #default="{ row }"><el-input v-model="row.bidder_name" /></template>
-          </el-table-column>
-          <el-table-column label="投标价格" min-width="160">
-            <template #default="{ row }"><el-input v-model="row.bid_price" /></template>
-          </el-table-column>
-          <el-table-column label="操作" width="90" fixed="right">
-            <template #default="{ $index }"><el-button text type="danger" @click="removeBid($index)">删除</el-button></template>
-          </el-table-column>
-        </el-table>
-      </section>
-
-      <section class="panel result-panel">
-        <div class="section-head">
-          <div>
+      <section class="main-column">
+        <section class="wire-panel result-summary">
+          <header class="result-header">
             <h2>测算结果</h2>
-            <span>{{ store.result ? '后端计算结果' : '等待计算' }}</span>
+            <div class="result-actions">
+              <el-button class="btn-blue secondary-action" :icon="DataLine" :disabled="!store.result" @click="traceOpen = true">过程</el-button>
+              <el-button class="btn-blue" :icon="Finished" :loading="loading" @click="runCalculate()">测算</el-button>
+            </div>
+          </header>
+          <div class="summary-grid">
+            <div class="summary-item">
+              <label>基准价</label>
+              <strong>{{ store.result?.benchmark_price ?? '-' }}</strong>
+            </div>
+            <div class="summary-item">
+              <label>基准价折扣率</label>
+              <strong>{{ benchmarkDiscountValue }}</strong>
+            </div>
+            <div class="summary-item">
+              <label>投标人数量</label>
+              <strong>{{ store.result?.bidder_count ?? '-' }}</strong>
+            </div>
+            <div class="summary-item">
+              <label>有效报价数量</label>
+              <strong>{{ store.result?.effective_count ?? '-' }}</strong>
+            </div>
+            <div class="summary-item">
+              <label>目标公司排名</label>
+              <strong>{{ store.result?.target.rank ?? '-' }}</strong>
+            </div>
+            <div class="summary-item">
+              <label>与第1名分差</label>
+              <strong>{{ store.result?.target.score_gap ?? '-' }}</strong>
+            </div>
+            <div class="summary-item">
+              <label>折算后分差</label>
+              <strong>{{ store.result?.target.weighted_gap ?? '-' }}</strong>
+            </div>
+            <div class="summary-item export-item">
+              <div class="label-spacer" />
+              <el-button class="btn-blue export-button" :icon="Download" :disabled="!store.result" @click="downloadResult">导出评分结果</el-button>
+            </div>
           </div>
-          <el-button :disabled="!store.result" @click="traceOpen = true">过程</el-button>
-        </div>
-        <div class="metrics">
-          <div><span>基准价</span><strong>{{ store.result?.benchmark_price ?? '-' }}</strong></div>
-          <div><span>基准价折扣率</span><strong>{{ benchmarkDiscountRate }}</strong></div>
-          <div><span>投标人数量</span><strong>{{ store.result?.bidder_count ?? '-' }}</strong></div>
-          <div><span>有效投标人数量</span><strong>{{ store.result?.effective_count ?? '-' }}</strong></div>
-          <div><span>目标公司报价排名</span><strong>{{ store.result?.target.rank ?? '-' }}</strong></div>
-          <div><span>目标公司价格分</span><strong>{{ store.result?.target.score ?? '-' }}</strong></div>
-          <div><span>目标公司与第1名的分差</span><strong>{{ store.result?.target.score_gap ?? '-' }}</strong></div>
-          <div><span>折算后分差</span><strong>{{ store.result?.target.weighted_gap ?? '-' }}</strong></div>
-        </div>
-        <el-table :data="resultRows" height="360" border>
-          <el-table-column prop="bidder_name" label="投标人" min-width="150" />
-          <el-table-column prop="bid_price" label="报价" width="120" />
-          <el-table-column prop="score" label="价格分" width="110" />
-          <el-table-column prop="rank" label="排名" width="70" />
-          <el-table-column label="参与" width="80">
-            <template #default="{ row }"><el-tag :type="row.participated ? 'success' : 'info'">{{ row.participated ? '是' : '否' }}</el-tag></template>
-          </el-table-column>
-          <el-table-column label="基准" width="80">
-            <template #default="{ row }"><el-tag :type="row.used_for_benchmark ? 'primary' : 'info'">{{ row.used_for_benchmark ? '是' : '否' }}</el-tag></template>
-          </el-table-column>
-          <el-table-column prop="remark" label="备注" min-width="140" />
-        </el-table>
-      </section>
-    </section>
+        </section>
 
-    <el-drawer v-model="traceOpen" title="计算过程" size="420px">
-      <el-descriptions :column="1" border>
+        <section class="wire-panel ranking-panel">
+          <header class="ranking-header">
+            <h2>排名详情</h2>
+            <div class="table-actions">
+              <el-button class="btn-blue" :icon="DocumentCopy" @click="pasteOpen = true">粘贴</el-button>
+              <el-button class="btn-blue" :icon="Plus" @click="addBid">新增</el-button>
+            </div>
+          </header>
+          <div class="ranking-table">
+            <el-table :data="resultTableRows" height="100%" :row-class-name="rowClassName">
+              <el-table-column label="投标人" min-width="150" align="center">
+                <template #default="{ row, $index }">
+                  <el-input v-if="!store.result" v-model="store.bids[$index].bidder_name" />
+                  <span v-else>{{ row.bidder_name }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="报价" width="140" align="center">
+                <template #default="{ row, $index }">
+                  <el-input v-if="!store.result" v-model="store.bids[$index].bid_price" />
+                  <span v-else>{{ row.bid_price ?? '-' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="score" label="价格分" width="110" align="center" />
+              <el-table-column prop="rank" label="排名" width="90" align="center" />
+              <el-table-column label="折扣率" width="110" align="center">
+                <template #default="{ row }">{{ formatBidDiscount(row.bid_price) }}</template>
+              </el-table-column>
+              <el-table-column label="备注" min-width="130" align="center">
+                <template #default="{ row, $index }">
+                  <span>{{ row.remark }}</span>
+                  <el-button v-if="!store.result" text type="danger" @click="removeBid($index)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </section>
+      </section>
+    </div>
+
+    <!-- 弹窗部分 -->
+    <el-drawer v-model="traceOpen" title="详细计算逻辑" size="450px">
+      <el-descriptions :column="1" border size="small">
         <el-descriptions-item v-for="(value, key) in store.result?.debug" :key="key" :label="String(key)">
           {{ value }}
         </el-descriptions-item>
       </el-descriptions>
     </el-drawer>
 
-    <el-dialog v-model="mappingOpen" title="手动映射 Excel 列" width="720px">
-      <div class="mapping-grid">
-        <el-form-item label="投标人列">
-          <el-select v-model="bidderColumn">
-            <el-option v-for="column in mappingColumns" :key="column" :label="column" :value="column" />
-          </el-select>
+    <el-dialog v-model="mappingOpen" title="导入配置" width="500px">
+      <el-form label-width="100px">
+        <el-form-item label="投标人名称列">
+          <el-select v-model="bidderColumn" style="width: 100%"><el-option v-for="col in mappingColumns" :key="col" :label="col" :value="col" /></el-select>
         </el-form-item>
-        <el-form-item label="报价列">
-          <el-select v-model="priceColumn">
-            <el-option v-for="column in mappingColumns" :key="column" :label="column" :value="column" />
-          </el-select>
+        <el-form-item label="投标报价列">
+          <el-select v-model="priceColumn" style="width: 100%"><el-option v-for="col in mappingColumns" :key="col" :label="col" :value="col" /></el-select>
         </el-form-item>
-      </div>
-      <el-table :data="mappingPreview" height="280" border>
-        <el-table-column v-for="column in mappingColumns" :key="column" :prop="column" :label="column" min-width="140" />
-      </el-table>
+      </el-form>
       <template #footer>
         <el-button @click="mappingOpen = false">取消</el-button>
-        <el-button type="primary" @click="applyMappedImport">导入</el-button>
+        <el-button type="primary" @click="applyMappedImport">导入数据</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="pasteOpen" title="粘贴报价明细" width="620px">
-      <el-input
-        v-model="pasteText"
-        type="textarea"
-        :rows="12"
-        placeholder="每行一条：投标人名称	投标价格。也支持只粘贴报价，系统会自动生成投标人名称。"
-      />
+    <el-dialog v-model="pasteOpen" title="快速粘贴" width="500px">
+      <el-input v-model="pasteText" type="textarea" :rows="10" placeholder="投标人名称 [Tab] 投标价格" />
       <template #footer>
         <el-button @click="pasteOpen = false">取消</el-button>
-        <el-button type="primary" @click="applyPastedRows">应用</el-button>
+        <el-button type="primary" @click="applyPastedRows">确定</el-button>
       </template>
     </el-dialog>
   </main>
