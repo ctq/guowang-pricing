@@ -18,3 +18,11 @@ dist/
 # Environment
 .env
 .env.*
+
+# Screenshots / design assets
+*.jpg
+*.jpeg
+*.png
+
+# Standalone exported HTML
+tendering-evaluation-system_v*.html
