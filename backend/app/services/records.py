@@ -41,14 +41,26 @@ def _ceiling_eq(a: float | None, b: float | None) -> bool:
         return True
     if a is None or b is None:
         return False
-    return abs(a - b) < 0.000001
+    return abs(float(a) - float(b)) < 0.000001
 
 
 async def save_summary(db: AsyncSession, payload: CalculateRequest, result: CalculationResult) -> None:
     digest = param_hash(payload)
     ten_minutes_ago = datetime.utcnow() - timedelta(minutes=10)
     bm = float(result.benchmark_price)
-    cp = float(result.ceiling_price) if result.ceiling_price is not None else None
+    cp = float(payload.project.ceiling_price) if payload.project.ceiling_price is not None else None
+
+    exact_stmt = select(CalculationRecord).where(
+        CalculationRecord.param_hash == digest,
+        CalculationRecord.method_code == result.method_code,
+        CalculationRecord.benchmark_price == result.benchmark_price,
+    )
+    existing = (await db.execute(exact_stmt)).scalars().first()
+    if existing is not None:
+        existing.updated_at = datetime.utcnow()
+        existing.use_count += 1
+        await db.commit()
+        return
 
     stmt = select(CalculationRecord).where(
         CalculationRecord.province == payload.project.province,

@@ -43,7 +43,13 @@ def calculate(payload: CalculationInput, params: dict[str, Decimal]) -> Calculat
     interval_rows = select_interval(base_rows, lower, upper)
     used_rows = interval_rows or base_rows
     a2 = avg([row.bid_price for row in used_rows if row.bid_price is not None])
-    benchmark = a2 * (ONE + params["c"])
+    float_direction = params.get("float_direction", Decimal("1"))
+    if float_direction == Decimal("-1"):
+        benchmark = a2 * (ONE - params["c"])
+        benchmark_formula = "A2 * (1 - c)"
+    else:
+        benchmark = a2 * (ONE + params["c"])
+        benchmark_formula = "A2 * (1 + c)"
     mark_used(rows, used_rows)
     apply_linear_scores(rows, benchmark, params)
     assign_ranks(rows)
@@ -56,5 +62,5 @@ def calculate(payload: CalculationInput, params: dict[str, Decimal]) -> Calculat
         effective_count=len(used_rows),
         target=target_result(rows, payload.project),
         rows=rows,
-        debug={"A1": q(a1, 6), "A2": q(a2, 6), "lower": q(lower, 6), "upper": q(upper, 6), "trim_high": high, "trim_low": low, "fallback": not bool(interval_rows), "benchmark_formula": "A2 * (1 + c)"},
+        debug={"A1": q(a1, 6), "A2": q(a2, 6), "lower": q(lower, 6), "upper": q(upper, 6), "trim_high": high, "trim_low": low, "fallback": not bool(interval_rows), "benchmark_formula": benchmark_formula},
     )
