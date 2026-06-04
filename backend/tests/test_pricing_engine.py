@@ -62,3 +62,15 @@ def test_a07_uses_v12_template_one_minus_a_formula() -> None:
     result = calculate(payload("A07", ["100", "200"], {"F1": Decimal("0"), "F2": Decimal("2"), "a": Decimal("-0.1")}))
     assert result.benchmark_price == Decimal("165.000000")
     assert result.debug["benchmark_formula"] == "A2 * (1 - a)"
+
+
+def test_a01_supports_user_selected_minus_c_float_direction() -> None:
+    result = calculate(
+        payload(
+            "A01",
+            ["180", "190", "200", "210"],
+            {"c": Decimal("0.01"), "float_direction": Decimal("-1")},
+        )
+    )
+    assert result.benchmark_price == Decimal("193.050000")
+    assert result.debug["benchmark_formula"] == "A2 * (1 - c)"
