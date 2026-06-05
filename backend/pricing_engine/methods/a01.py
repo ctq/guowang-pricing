@@ -59,7 +59,7 @@ def calculate(payload: CalculationInput, params: dict[str, Decimal]) -> Calculat
         benchmark_price=q(benchmark, 6) or benchmark,
         discount_rate=discount_rate(benchmark, payload.project.ceiling_price),
         bidder_count=len(active),
-        effective_count=len(used_rows),
+        effective_count=len(active),
         target=target_result(rows, payload.project),
         rows=rows,
         debug={"A1": q(a1, 6), "A2": q(a2, 6), "lower": q(lower, 6), "upper": q(upper, 6), "trim_high": high, "trim_low": low, "fallback": not bool(interval_rows), "benchmark_formula": benchmark_formula},
