@@ -19,4 +19,4 @@ def calculate(payload: CalculationInput, params: dict[str, Decimal]) -> Calculat
     for row in active:
         row.score = q(max(HUNDRED * benchmark / row.bid_price, ZERO), scale)
     assign_ranks(rows)
-    return CalculationResult(CODE, NAME, q(benchmark, 6) or benchmark, discount_rate(benchmark, payload.project.ceiling_price), len(active), len(active), target_result(rows, payload.project), rows, {"benchmark_formula": "min(bid_price)"})
+    return CalculationResult(CODE, NAME, q(benchmark, 6) or benchmark, discount_rate(benchmark, payload.project.ceiling_price), len(rows), len(active), target_result(rows, payload.project), rows, {"benchmark_formula": "min(bid_price)"})

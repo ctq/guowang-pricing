@@ -29,4 +29,4 @@ def calculate(payload: CalculationInput, params: dict[str, Decimal]) -> Calculat
     mark_used(rows, used_rows)
     apply_linear_scores(rows, benchmark, params)
     assign_ranks(rows)
-    return CalculationResult(CODE, NAME, q(benchmark, 6) or benchmark, discount_rate(benchmark, payload.project.ceiling_price), len(active), len(active), target_result(rows, payload.project), rows, {"A_full": q(full_avg, 6), "selected_average": q(selected_avg, 6), "lower": q(lower, 6) if lower is not None else None, "upper": q(upper, 6) if upper is not None else None, "fallback": fallback, "benchmark_formula": "selected_average * (1 + c)"})
+    return CalculationResult(CODE, NAME, q(benchmark, 6) or benchmark, discount_rate(benchmark, payload.project.ceiling_price), len(rows), len(active), target_result(rows, payload.project), rows, {"A_full": q(full_avg, 6), "selected_average": q(selected_avg, 6), "lower": q(lower, 6) if lower is not None else None, "upper": q(upper, 6) if upper is not None else None, "fallback": fallback, "benchmark_formula": "selected_average * (1 + c)"})

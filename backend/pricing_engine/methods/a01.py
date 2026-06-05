@@ -58,7 +58,7 @@ def calculate(payload: CalculationInput, params: dict[str, Decimal]) -> Calculat
         method_name=NAME,
         benchmark_price=q(benchmark, 6) or benchmark,
         discount_rate=discount_rate(benchmark, payload.project.ceiling_price),
-        bidder_count=len(active),
+        bidder_count=len(rows),
         effective_count=len(active),
         target=target_result(rows, payload.project),
         rows=rows,

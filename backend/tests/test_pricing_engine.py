@@ -32,7 +32,7 @@ def test_all_methods_are_registered() -> None:
 def test_methods_calculate_scores_and_ranks(method: str) -> None:
     result = calculate(payload(method, ["180", "190", "不开标", "200", "210", "220"]))
     assert result.benchmark_price > 0
-    assert result.bidder_count == 5
+    assert result.bidder_count == 6  # 含不开标，共 6 条
     assert result.rows[2].participated is False
     assert result.rows[2].score == Decimal("0")
     assert sorted(row.rank for row in result.rows if row.participated) == [1, 2, 3, 4, 5]

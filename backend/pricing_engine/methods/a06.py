@@ -16,4 +16,4 @@ def calculate(payload: CalculationInput, params: dict[str, Decimal]) -> Calculat
     mark_used(rows, active)
     apply_linear_scores(rows, benchmark, params)
     assign_ranks(rows)
-    return CalculationResult(CODE, NAME, q(benchmark, 6) or benchmark, discount_rate(benchmark, payload.project.ceiling_price), len(active), len(active), target_result(rows, payload.project), rows, {"A1": q(benchmark, 6), "benchmark_formula": "average(all participating prices)"})
+    return CalculationResult(CODE, NAME, q(benchmark, 6) or benchmark, discount_rate(benchmark, payload.project.ceiling_price), len(rows), len(active), target_result(rows, payload.project), rows, {"A1": q(benchmark, 6), "benchmark_formula": "average(all participating prices)"})

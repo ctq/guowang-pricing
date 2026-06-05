@@ -28,4 +28,4 @@ def calculate(payload: CalculationInput, params: dict[str, Decimal]) -> Calculat
             score = (row.bid_price / benchmark) * params["m"] * HUNDRED
         row.score = q(max(score, ZERO), scale)
     assign_ranks(rows)
-    return CalculationResult(CODE, NAME, q(benchmark, 6) or benchmark, discount_rate(benchmark, payload.project.ceiling_price), len(active), len(active), target_result(rows, payload.project), rows, {"A1": q(a1, 6), "A2": q(a2, 6), "lower": q(lower, 6), "upper": q(upper, 6), "fallback": not bool(interval_rows), "benchmark_formula": "A2 * (1 - a)"})
+    return CalculationResult(CODE, NAME, q(benchmark, 6) or benchmark, discount_rate(benchmark, payload.project.ceiling_price), len(rows), len(active), target_result(rows, payload.project), rows, {"A1": q(a1, 6), "A2": q(a2, 6), "lower": q(lower, 6), "upper": q(upper, 6), "fallback": not bool(interval_rows), "benchmark_formula": "A2 * (1 - a)"})
