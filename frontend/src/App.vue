@@ -1,28 +1,37 @@
 <script setup lang="ts">
+/**
+ * 国网价格分在线测算系统 - 主页面组件
+ * 提供项目参数录入、开标记录导入/粘贴、评分测算与结果展示等功能。
+ */
 import { computed, onMounted, ref, watch } from 'vue'
-import { DataLine, DocumentCopy, Download, Finished, Plus, Refresh, Upload } from '@element-plus/icons-vue'
+import { DataLine, Download, Finished, Plus, Refresh, Upload } from '@element-plus/icons-vue'
 import { ElMessage, type UploadProps } from 'element-plus'
 import { calculate, exportXlsx, fetchMethods, importXlsx } from './api/pricing'
 import { useCalculatorStore } from './stores/calculator'
 
 const store = useCalculatorStore()
-const loading = ref(false)
-const traceOpen = ref(false)
-const mappingOpen = ref(false)
-const pasteOpen = ref(false)
-const pasteText = ref('')
-const mappingColumns = ref<string[]>([])
-const mappingPreview = ref<Record<string, string>[]>([])
-const bidderColumn = ref('')
-const priceColumn = ref('')
-const a01FloatingType = ref('')
 
+// 界面状态
+const loading = ref(false)          // 测算请求加载中
+const imported = ref(false)         // 是否已导入开标记录（控制测算按钮启用）
+const traceOpen = ref(false)        // 计算过程抽屉可见
+const mappingOpen = ref(false)      // 列映射弹窗可见
+const pasteOpen = ref(false)        // 快速粘贴弹窗可见
+const pasteText = ref('')           // 粘贴文本内容
+const mappingColumns = ref<string[]>([])    // 识别到的 Excel 列名
+const mappingPreview = ref<Record<string, string>[]>([])  // 导入预览数据
+const bidderColumn = ref('')        // 手动映射的投标人列
+const priceColumn = ref('')         // 手动映射的报价列
+const a01FloatingType = ref('')     // A01 算法浮动方向（1=上浮, -1=下浮）
+
+// 省份列表（固定维护）
 const provinces = [
   '北京', '天津', '河北', '山西', '内蒙古', '辽宁', '吉林', '黑龙江', '上海', '江苏', '浙江', '安徽',
   '福建', '江西', '山东', '河南', '湖北', '湖南', '广东', '广西', '海南', '重庆', '四川', '贵州',
   '云南', '西藏', '陕西', '甘肃', '青海', '宁夏', '新疆', '其他',
 ]
 
+// 按排名升序排列的结果行
 const resultRows = computed(() => {
   const rows = store.result?.rows ?? []
   return [...rows].sort((a, b) => {
@@ -32,8 +41,12 @@ const resultRows = computed(() => {
     return a.rank - b.rank
   })
 })
+
+// 基准价折扣率（百分比格式）
 const benchmarkDiscountRate = computed(() => formatPercent(store.result?.discount_rate))
 const benchmarkDiscountValue = computed(() => benchmarkDiscountRate.value === '-' ? '-' : benchmarkDiscountRate.value.replace('%', ''))
+
+// 各算法的基准价公式说明
 const benchmarkFormulaByMethod: Record<string, string> = {
   A01: '',
   A02: 'A1 * (1 + c)',
@@ -45,6 +58,8 @@ const benchmarkFormulaByMethod: Record<string, string> = {
   A08: 'A2 * (1 + c)',
 }
 const fixedBenchmarkFormula = computed(() => benchmarkFormulaByMethod[store.methodCode] ?? '')
+
+// 表格行数据：有结果时展示结果，否则显示导入的原始数据
 const resultTableRows = computed(() => {
   if (store.result) return resultRows.value
   return store.bids.map(row => ({
@@ -57,6 +72,11 @@ const resultTableRows = computed(() => {
   }))
 })
 
+const canCalculate = computed(() => imported.value)
+
+/**
+ * 将小数转为百分比字符串
+ */
 function formatPercent(value: string | null | undefined) {
   if (value === null || value === undefined || value === '') return '-'
   const parsed = Number(value)
@@ -64,6 +84,9 @@ function formatPercent(value: string | null | undefined) {
   return `${(parsed * 100).toFixed(2)}%`
 }
 
+/**
+ * 计算单条报价相对于包限价的折扣率
+ */
 function formatBidDiscount(value: string | null | undefined) {
   if (!value || value === '不开标') return '-'
   const ceiling = Number(store.project.ceiling_price)
@@ -72,14 +95,21 @@ function formatBidDiscount(value: string | null | undefined) {
   return ((bid / ceiling) * 100).toFixed(2)
 }
 
+/**
+ * 参数标签名映射（round_scale 显示为"浮动类型"）
+ */
 function parameterLabel(key: string) {
   return key === 'round_scale' ? '浮动类型' : key
 }
 
+/** 是否为 A01 浮动类型参数 */
 function isFloatingTypeParam(key: string) {
   return key === 'round_scale'
 }
 
+/**
+ * 构建 API 请求负载，A01 额外注入浮动方向
+ */
 function payloadWithFloatingType(source = 'manual') {
   const payload = store.payload(source)
   if (store.methodCode === 'A01') {
@@ -88,6 +118,9 @@ function payloadWithFloatingType(source = 'manual') {
   return payload
 }
 
+/**
+ * 测算前校验：必填项目参数、算法参数是否填写完整
+ */
 function validateBeforeCalculate() {
   const requiredProjectFields: Array<[string, string | undefined]> = [
     ['网省', store.project.province],
@@ -124,20 +157,24 @@ onMounted(async () => {
   store.applyDefaults()
 })
 
+// 切换算法时重置计算结果与参数默认值
 watch(() => store.methodCode, () => {
   store.applyDefaults()
   store.result = null
   a01FloatingType.value = ''
 })
 
+/** 添加空行报价 */
 function addBid() {
   store.bids.push({ bidder_name: `投标人${store.bids.length + 1}`, bid_price: '' })
 }
 
+/** 删除指定行报价 */
 function removeBid(index: number) {
   store.bids.splice(index, 1)
 }
 
+/** 应用手动列映射后的导入数据 */
 function applyMappedImport() {
   if (!bidderColumn.value || !priceColumn.value) {
     ElMessage.warning('请选择投标人列和报价列')
@@ -150,10 +187,12 @@ function applyMappedImport() {
     }))
     .filter(row => row.bidder_name || row.bid_price)
   store.result = null
+  imported.value = true
   mappingOpen.value = false
   ElMessage.success(`已导入 ${store.bids.length} 条报价`)
 }
 
+/** 解析粘贴的 Tab/逗号分隔文本为报价列表 */
 function applyPastedRows() {
   const rows = pasteText.value
     .split(/\r?\n/)
@@ -177,6 +216,7 @@ function applyPastedRows() {
   ElMessage.success(`已粘贴 ${rows.length} 条报价`)
 }
 
+/** 发起测算请求 */
 async function runCalculate(source = 'manual') {
   if (!validateBeforeCalculate()) return
   loading.value = true
@@ -190,6 +230,7 @@ async function runCalculate(source = 'manual') {
   }
 }
 
+/** 导出测算结果为 Excel 文件 */
 async function downloadResult() {
   if (!validateBeforeCalculate()) return
   try {
@@ -199,6 +240,7 @@ async function downloadResult() {
   }
 }
 
+/** 上传 Excel 开标记录文件后的预处理 */
 const beforeUpload: UploadProps['beforeUpload'] = async (file) => {
   try {
     const data = await importXlsx(file)
@@ -213,6 +255,7 @@ const beforeUpload: UploadProps['beforeUpload'] = async (file) => {
     }
     store.bids = data.rows
     store.result = null
+    imported.value = true
     ElMessage.success(`已导入 ${data.rows.length} 条报价`)
   } catch (error) {
     ElMessage.error((error as { response?: { data?: { detail?: string } } }).response?.data?.detail ?? '导入失败')
@@ -220,6 +263,9 @@ const beforeUpload: UploadProps['beforeUpload'] = async (file) => {
   return false
 }
 
+/**
+ * 表格行样式：目标公司行高亮
+ */
 function rowClassName({ row }: { row: any }) {
   if (store.project.target_company && row.bidder_name === store.project.target_company) {
     return 'target-row'
@@ -231,20 +277,25 @@ function rowClassName({ row }: { row: any }) {
 <template>
   <main class="app-shell">
     <div class="workspace">
+      <!-- 左侧：评标参数面板 -->
       <aside class="wire-panel params-panel">
         <h1>评标参数</h1>
+        <!-- 开标记录导入区域（测算前必须导入） -->
         <div class="import-row">
           <el-upload :show-file-list="false" accept=".xlsx" :before-upload="beforeUpload">
             <el-button class="btn-blue" :icon="Upload">导入开标记录</el-button>
           </el-upload>
+          <span v-if="!imported" class="import-hint">* 必须先导入开标记录才能开始测算</span>
+          <span v-else class="import-hint imported">已导入开标记录</span>
         </div>
 
         <el-form label-position="top" class="wire-form">
+          <!-- 基础项目信息 -->
           <div class="form-grid">
-            <el-form-item label="招标编号">
+            <el-form-item label="招标编号" required>
               <el-input v-model="store.project.tender_no" />
             </el-form-item>
-            <el-form-item label="网省">
+            <el-form-item label="网省" required>
               <el-select v-model="store.project.province" filterable>
                 <el-option v-for="province in provinces" :key="province" :label="province" :value="province" />
               </el-select>
@@ -253,34 +304,39 @@ function rowClassName({ row }: { row: any }) {
           <el-form-item label="招标名称">
             <el-input v-model="store.project.tender_name" />
           </el-form-item>
-          <el-form-item label="目标公司">
-            <el-input v-model="store.project.target_company" />
-          </el-form-item>
-          <div class="form-grid">
-            <el-form-item label="包限价">
-              <el-input v-model="store.project.ceiling_price" />
+            <el-form-item label="目标公司" required>
+              <el-input v-model="store.project.target_company" />
             </el-form-item>
-            <el-form-item label="价格分占比">
-              <el-input v-model="store.project.price_weight" />
-            </el-form-item>
-          </div>
-          <el-form-item label="评分规则">
+            <!-- 包限价与价格分占比 -->
+            <div class="form-grid">
+              <el-form-item label="包限价" required>
+                <el-input v-model="store.project.ceiling_price" />
+              </el-form-item>
+              <el-form-item label="价格分占比" required>
+                <el-input v-model="store.project.price_weight" />
+              </el-form-item>
+            </div>
+            <!-- 评分方法选择 -->
+            <el-form-item label="评分规则" required>
             <el-select v-model="store.methodCode" filterable>
               <el-option v-for="method in store.methods" :key="method.code" :label="`${method.code} ${method.name}`" :value="method.code" />
             </el-select>
           </el-form-item>
 
+          <!-- 算法参数区 -->
           <div class="param-divider" />
           <div class="form-grid param-grid">
-            <el-form-item v-for="(_, key) in store.params" :key="key" :label="parameterLabel(String(key))">
+            <el-form-item v-for="(_, key) in store.params" :key="key" :label="parameterLabel(String(key))" required>
+              <!-- A01 浮动方向选择器 -->
               <el-select
                 v-if="store.methodCode === 'A01' && isFloatingTypeParam(String(key))"
                 v-model="a01FloatingType"
                 placeholder="请选择"
               >
-                <el-option label="A2 * (1+c)" value="1" />
-                <el-option label="A2 * (1-c)" value="-1" />
+                <el-option label="上浮：基准价=A2*(1+c)" value="1" />
+                <el-option label="下浮：基准价=A2*(1-c)" value="-1" />
               </el-select>
+              <!-- 固定公式展示（非 A01 的 round_scale） -->
               <el-input
                 v-else-if="isFloatingTypeParam(String(key))"
                 :model-value="fixedBenchmarkFormula"
@@ -293,15 +349,18 @@ function rowClassName({ row }: { row: any }) {
         </el-form>
       </aside>
 
+      <!-- 右侧：结果展示区 -->
       <section class="main-column">
+        <!-- 测算结果摘要 -->
         <section class="wire-panel result-summary">
           <header class="result-header">
             <h2>测算结果</h2>
             <div class="result-actions">
               <el-button class="btn-blue secondary-action" :icon="DataLine" :disabled="!store.result" @click="traceOpen = true">过程</el-button>
-              <el-button class="btn-blue" :icon="Finished" :loading="loading" @click="runCalculate()">测算</el-button>
+              <el-button class="btn-blue" :icon="Finished" :loading="loading" :disabled="!canCalculate" @click="runCalculate()">测算</el-button>
             </div>
           </header>
+          <!-- 2x4 指标卡 -->
           <div class="summary-grid">
             <div class="summary-item">
               <label>基准价</label>
@@ -338,11 +397,11 @@ function rowClassName({ row }: { row: any }) {
           </div>
         </section>
 
+        <!-- 排名详情表格 -->
         <section class="wire-panel ranking-panel">
           <header class="ranking-header">
             <h2>排名详情</h2>
             <div class="table-actions">
-              <el-button class="btn-blue" :icon="DocumentCopy" @click="pasteOpen = true">粘贴</el-button>
               <el-button class="btn-blue" :icon="Plus" @click="addBid">新增</el-button>
             </div>
           </header>
@@ -377,7 +436,7 @@ function rowClassName({ row }: { row: any }) {
       </section>
     </div>
 
-    <!-- 弹窗部分 -->
+    <!-- 计算过程详情抽屉 -->
     <el-drawer v-model="traceOpen" title="详细计算逻辑" size="450px">
       <el-descriptions :column="1" border size="small">
         <el-descriptions-item v-for="(value, key) in store.result?.debug" :key="key" :label="String(key)">
@@ -386,6 +445,7 @@ function rowClassName({ row }: { row: any }) {
       </el-descriptions>
     </el-drawer>
 
+    <!-- 导入列映射弹窗 -->
     <el-dialog v-model="mappingOpen" title="导入配置" width="500px">
       <el-form label-width="100px">
         <el-form-item label="投标人名称列">
@@ -401,6 +461,7 @@ function rowClassName({ row }: { row: any }) {
       </template>
     </el-dialog>
 
+    <!-- 快速粘贴弹窗 -->
     <el-dialog v-model="pasteOpen" title="快速粘贴" width="500px">
       <el-input v-model="pasteText" type="textarea" :rows="10" placeholder="投标人名称 [Tab] 投标价格" />
       <template #footer>

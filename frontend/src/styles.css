@@ -1,3 +1,5 @@
+/* ===== 国网价格分在线测算系统 - 全局样式 ===== */
+
 :root {
   --el-color-primary: #2563eb;
   --blue: #2563eb;
@@ -27,6 +29,8 @@ select {
   font-family: inherit;
 }
 
+/* ===== 页面布局 ===== */
+
 .app-shell {
   min-height: 100vh;
   padding: 24px;
@@ -47,6 +51,8 @@ select {
   background: #ffffff;
 }
 
+/* ===== 左侧参数面板 ===== */
+
 .params-panel {
   padding: 24px;
 }
@@ -62,9 +68,25 @@ select {
   letter-spacing: 0;
 }
 
+/* 导入开标记录区域 */
 .import-row {
   margin: 16px 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
+
+.import-hint {
+  font-size: 12px;
+  color: #dc2626;
+}
+
+.import-hint.imported {
+  color: #16a34a;
+}
+
+/* ===== 右侧主区域 ===== */
 
 .main-column {
   display: grid;
@@ -73,6 +95,7 @@ select {
   min-width: 0;
 }
 
+/* 测算结果摘要 */
 .result-summary {
   padding: 24px;
 }
@@ -96,6 +119,7 @@ select {
   gap: 8px;
 }
 
+/* 2x4 指标卡网格 */
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(120px, 1fr));
@@ -142,6 +166,7 @@ select {
   font-size: 12px;
 }
 
+/* 排名详情表格容器 */
 .ranking-panel {
   display: flex;
   flex-direction: column;
@@ -158,6 +183,8 @@ select {
   flex: 1;
   min-height: 0;
 }
+
+/* ===== 表单与组件样式 ===== */
 
 .wire-form .el-form-item {
   margin-bottom: 16px;
@@ -193,10 +220,12 @@ select {
   margin-top: -2px;
 }
 
+/* 目标公司行高亮 */
 .target-row {
   --el-table-tr-bg-color: #f9fafb;
 }
 
+/* 输入框与选择器 */
 .el-input,
 .el-select {
   width: 100%;
@@ -233,6 +262,7 @@ select {
   line-height: 30px;
 }
 
+/* 蓝色主按钮 */
 .btn-blue.el-button,
 .btn-blue.el-button:focus {
   display: inline-flex;
@@ -255,13 +285,16 @@ select {
   color: #ffffff;
 }
 
+/* 按钮禁用态：淡蓝色 */
 .btn-blue.el-button.is-disabled,
 .btn-blue.el-button.is-disabled:hover {
   border-color: #93c5fd;
   background: #93c5fd;
   color: #ffffff;
+  cursor: not-allowed;
 }
 
+/* 次级操作按钮（如"过程"）：计算完成前不可见 */
 .secondary-action.el-button.is-disabled,
 .secondary-action.el-button.is-disabled:hover {
   display: none;
@@ -279,6 +312,7 @@ select {
   letter-spacing: 0;
 }
 
+/* 表格 */
 .el-table {
   --el-table-border-color: var(--black);
   --el-table-header-bg-color: var(--gray-head);
@@ -326,11 +360,14 @@ select {
   color: #dc2626;
 }
 
+/* 弹窗与抽屉 */
 .el-dialog,
 .el-drawer {
   border-radius: 0 !important;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Microsoft YaHei", sans-serif;
 }
+
+/* ===== 响应式适配 ===== */
 
 @media (max-width: 1120px) {
   .workspace {
