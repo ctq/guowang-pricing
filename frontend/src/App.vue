@@ -283,6 +283,10 @@ function rowClassName({ row }: { row: any }) {
 
 <template>
   <main class="app-shell">
+    <header class="app-header">
+      <span class="app-title">电算宝</span>
+      <span class="app-slogan">一键测算报价得分</span>
+    </header>
     <div class="workspace">
       <!-- 左侧：评标参数面板 -->
       <aside class="wire-panel params-panel">

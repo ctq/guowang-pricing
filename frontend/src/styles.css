@@ -5,31 +5,31 @@
   --el-color-primary: #00875a;
   --el-color-primary-light-3: #00875a;
   --el-color-primary-light-5: #00875a;
-  --el-color-primary-light-7: #eaf6f1;
-  --el-color-primary-light-9: #eaf6f1;
-  --el-border-color: #bfd8ce;
-  --el-border-color-light: #bfd8ce;
-  --el-border-color-lighter: #bfd8ce;
+  --el-color-primary-light-7: #EDF6F2;
+  --el-color-primary-light-9: #EDF6F2;
+  --el-border-color: #B3D9C9;
+  --el-border-color-light: #B3D9C9;
+  --el-border-color-lighter: #B3D9C9;
   --el-border-radius-base: 0;
   --el-border-radius-small: 0;
   --el-border-radius-round: 0;
   --el-box-shadow: none;
   --el-box-shadow-light: none;
   --el-box-shadow-lighter: none;
-  --el-fill-color-light: #eaf6f1;
-  --el-disabled-bg-color: #eaf6f1;
-  --el-disabled-border-color: #bfd8ce;
+  --el-fill-color-light: #EDF6F2;
+  --el-disabled-bg-color: #EDF6F2;
+  --el-disabled-border-color: #B3D9C9;
 
   /* 国网绿主题色 */
   --sg-green: #00875a;
   --sg-green-hover: #006b48;
-  --page-bg: #00875a;          /* 页面整体背景 */
-  --card-bg: #f3faf7;          /* 卡片面板背景 */
-  --panel-bg: #eaf6f1;         /* 子面板/区块背景 */
-  --readonly-bg: #dff0e9;      /* 只读/禁用背景 */
-  --border: #92c8b4;           /* 边框色 */
-  --label: #666666;            /* 标签文字色 */
-  --text: #333333;             /* 正文文字色 */
+  --page-bg: #00875a;              /* 页面整体背景 */
+  --card-bg: #EDF6F2;              /* 卡片面板底色（浅薄荷绿） */
+  --panel-bg: #EDF6F2;             /* 子面板/区块背景 */
+  --readonly-bg: #dff0e9;          /* 只读/禁用背景 */
+  --border: #B3D9C9;               /* 边框/分割线色 */
+  --label: #666666;                /* 标签文字色 */
+  --text: #222222;                 /* 正文文字色 */
 }
 
 * {
@@ -62,15 +62,41 @@ select {
 
 .app-shell {
   min-height: 100vh;
-  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 顶部通栏标题栏 */
+.app-header {
+  height: 80px;
+  background: var(--sg-green);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  flex-shrink: 0;
+}
+
+.app-title {
+  color: #ffffff;
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 80px;
+}
+
+.app-slogan {
+  color: #ffffff;
+  font-size: 32px;
+  line-height: 80px;
 }
 
 .workspace {
+  flex: 1;
   display: grid;
   grid-template-columns: minmax(360px, 1fr) minmax(720px, 2fr);
   gap: 24px;
   max-width: 1440px;
-  min-height: calc(100vh - 48px);
+  padding: 24px;
   margin: 0 auto;
 }
 
@@ -474,8 +500,20 @@ select {
 }
 
 @media (max-width: 680px) {
-  .app-shell {
+  .workspace {
     padding: 12px;
+  }
+
+  .app-header {
+    padding: 0 16px;
+  }
+
+  .app-title {
+    font-size: 28px;
+  }
+
+  .app-slogan {
+    font-size: 22px;
   }
 
   .form-grid,
