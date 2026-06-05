@@ -46,18 +46,22 @@ const resultRows = computed(() => {
 const benchmarkDiscountRate = computed(() => formatPercent(store.result?.discount_rate))
 const benchmarkDiscountValue = computed(() => benchmarkDiscountRate.value === '-' ? '-' : benchmarkDiscountRate.value.replace('%', ''))
 
-// 各算法的基准价公式说明
-const benchmarkFormulaByMethod: Record<string, string> = {
-  A01: '',
-  A02: 'A1 * (1 + c)',
-  A03: '所选平均值 * (1 + c)',
-  A04: '(A2 + 次低价) / 2',
-  A05: '最低有效报价',
-  A06: '全部有效报价平均值',
-  A07: 'A2 * (1 - a)',
-  A08: 'A2 * (1 + c)',
-}
-const fixedBenchmarkFormula = computed(() => benchmarkFormulaByMethod[store.methodCode] ?? '')
+// 当前算法可见的参数条目：非 A01 时隐藏 round_scale，A01 按固定顺序排列
+const visibleParamEntries = computed(() => {
+  const entries = Object.entries(store.params)
+  if (store.methodCode !== 'A01') {
+    return entries.filter(([key]) => !isFloatingTypeParam(key))
+  }
+  const order = ['w1', 'w2', 'n1', 'c', 'n2', 'round_scale']
+  return [...entries].sort(([left], [right]) => {
+    const leftIndex = order.indexOf(left)
+    const rightIndex = order.indexOf(right)
+    if (leftIndex === -1 && rightIndex === -1) return 0
+    if (leftIndex === -1) return 1
+    if (rightIndex === -1) return -1
+    return leftIndex - rightIndex
+  })
+})
 
 // 表格行数据：有结果时展示结果，否则显示导入的原始数据
 const resultTableRows = computed(() => {
@@ -95,11 +99,14 @@ function formatBidDiscount(value: string | null | undefined) {
   return ((bid / ceiling) * 100).toFixed(2)
 }
 
-/**
- * 参数标签名映射（round_scale 显示为"浮动类型"）
- */
 function parameterLabel(key: string) {
   return key === 'round_scale' ? '浮动类型' : key
+}
+
+/** 算法参数输入框的占位提示文本 */
+function parameterPlaceholder(key: string) {
+  if (isFloatingTypeParam(key)) return '请选择浮动类型'
+  return `请输入${key}`
 }
 
 /** 是否为 A01 浮动类型参数 */
@@ -291,22 +298,22 @@ function rowClassName({ row }: { row: any }) {
 
         <el-form label-position="top" class="wire-form">
           <!-- 基础项目信息 -->
+          <el-form-item label="招标编号" required>
+            <el-input v-model="store.project.tender_no" />
+          </el-form-item>
+          <el-form-item label="招标名称">
+            <el-input v-model="store.project.tender_name" />
+          </el-form-item>
           <div class="form-grid">
-            <el-form-item label="招标编号" required>
-              <el-input v-model="store.project.tender_no" />
-            </el-form-item>
             <el-form-item label="网省" required>
               <el-select v-model="store.project.province" filterable>
                 <el-option v-for="province in provinces" :key="province" :label="province" :value="province" />
               </el-select>
             </el-form-item>
-          </div>
-          <el-form-item label="招标名称">
-            <el-input v-model="store.project.tender_name" />
-          </el-form-item>
             <el-form-item label="目标公司" required>
               <el-input v-model="store.project.target_company" />
             </el-form-item>
+          </div>
             <!-- 包限价与价格分占比 -->
             <div class="form-grid">
               <el-form-item label="包限价" required>
@@ -326,23 +333,23 @@ function rowClassName({ row }: { row: any }) {
           <!-- 算法参数区 -->
           <div class="param-divider" />
           <div class="form-grid param-grid">
-            <el-form-item v-for="(_, key) in store.params" :key="key" :label="parameterLabel(String(key))" required>
+            <el-form-item
+              v-for="([paramKey]) in visibleParamEntries"
+              :key="paramKey"
+              :label="parameterLabel(paramKey)"
+              :class="{ 'full-row-field': isFloatingTypeParam(paramKey) }"
+              required
+            >
               <!-- A01 浮动方向选择器 -->
               <el-select
-                v-if="store.methodCode === 'A01' && isFloatingTypeParam(String(key))"
+                v-if="store.methodCode === 'A01' && isFloatingTypeParam(paramKey)"
                 v-model="a01FloatingType"
                 placeholder="请选择"
               >
                 <el-option label="上浮：基准价=A2*(1+c)" value="1" />
                 <el-option label="下浮：基准价=A2*(1-c)" value="-1" />
               </el-select>
-              <!-- 固定公式展示（非 A01 的 round_scale） -->
-              <el-input
-                v-else-if="isFloatingTypeParam(String(key))"
-                :model-value="fixedBenchmarkFormula"
-                disabled
-              />
-              <el-input v-else v-model="store.params[key]" />
+              <el-input v-else v-model="store.params[paramKey]" :placeholder="parameterPlaceholder(paramKey)" />
             </el-form-item>
           </div>
           <el-button class="reset-button" :icon="Refresh" text @click="store.applyDefaults()">默认值</el-button>
@@ -360,35 +367,35 @@ function rowClassName({ row }: { row: any }) {
               <el-button class="btn-blue" :icon="Finished" :loading="loading" :disabled="!canCalculate" @click="runCalculate()">测算</el-button>
             </div>
           </header>
-          <!-- 2x4 指标卡 -->
+          <!-- 2x4 结果指标网格 -->
           <div class="summary-grid">
             <div class="summary-item">
               <label>基准价</label>
-              <strong>{{ store.result?.benchmark_price ?? '-' }}</strong>
+              <el-input class="result-output" :model-value="store.result?.benchmark_price ?? ''" disabled />
             </div>
             <div class="summary-item">
               <label>基准价折扣率</label>
-              <strong>{{ benchmarkDiscountValue }}</strong>
+              <el-input class="result-output" :model-value="benchmarkDiscountValue === '-' ? '' : benchmarkDiscountValue" disabled />
             </div>
             <div class="summary-item">
               <label>投标人数量</label>
-              <strong>{{ store.result?.bidder_count ?? '-' }}</strong>
+              <el-input class="result-output" :model-value="store.result?.bidder_count ?? ''" disabled />
             </div>
             <div class="summary-item">
               <label>有效报价数量</label>
-              <strong>{{ store.result?.effective_count ?? '-' }}</strong>
+              <el-input class="result-output" :model-value="store.result?.effective_count ?? ''" disabled />
             </div>
             <div class="summary-item">
               <label>目标公司排名</label>
-              <strong>{{ store.result?.target.rank ?? '-' }}</strong>
+              <el-input class="result-output" :model-value="store.result?.target.rank ?? ''" disabled />
             </div>
             <div class="summary-item">
               <label>与第1名分差</label>
-              <strong>{{ store.result?.target.score_gap ?? '-' }}</strong>
+              <el-input class="result-output" :model-value="store.result?.target.score_gap ?? ''" disabled />
             </div>
             <div class="summary-item">
               <label>折算后分差</label>
-              <strong>{{ store.result?.target.weighted_gap ?? '-' }}</strong>
+              <el-input class="result-output" :model-value="store.result?.target.weighted_gap ?? ''" disabled />
             </div>
             <div class="summary-item export-item">
               <div class="label-spacer" />
@@ -407,24 +414,24 @@ function rowClassName({ row }: { row: any }) {
           </header>
           <div class="ranking-table">
             <el-table :data="resultTableRows" height="100%" :row-class-name="rowClassName">
-              <el-table-column label="投标人" min-width="150" align="center">
+              <el-table-column label="投标人" align="center">
                 <template #default="{ row, $index }">
                   <el-input v-if="!store.result" v-model="store.bids[$index].bidder_name" />
                   <span v-else>{{ row.bidder_name }}</span>
                 </template>
               </el-table-column>
-              <el-table-column label="报价" width="140" align="center">
+              <el-table-column label="报价" align="center">
                 <template #default="{ row, $index }">
                   <el-input v-if="!store.result" v-model="store.bids[$index].bid_price" />
                   <span v-else>{{ row.bid_price ?? '-' }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="score" label="价格分" width="110" align="center" />
-              <el-table-column prop="rank" label="排名" width="90" align="center" />
-              <el-table-column label="折扣率" width="110" align="center">
+              <el-table-column prop="score" label="价格分" align="center" />
+              <el-table-column prop="rank" label="排名" align="center" />
+              <el-table-column label="折扣率" align="center">
                 <template #default="{ row }">{{ formatBidDiscount(row.bid_price) }}</template>
               </el-table-column>
-              <el-table-column label="备注" min-width="130" align="center">
+              <el-table-column label="备注" align="center">
                 <template #default="{ row, $index }">
                   <span>{{ row.remark }}</span>
                   <el-button v-if="!store.result" text type="danger" @click="removeBid($index)">删除</el-button>
