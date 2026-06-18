@@ -33,3 +33,13 @@ async def init_db() -> None:
                 await conn.exec_driver_sql(f"ALTER TABLE calculation_logs ADD COLUMN {column} TEXT")
             except OperationalError:
                 pass
+        try:
+            await conn.exec_driver_sql("ALTER TABLE login_qrcodes RENAME COLUMN scene_str TO code")
+        except OperationalError:
+            pass
+        for col in ("openid",):
+            for tbl in ("calculation_records", "calculation_logs"):
+                try:
+                    await conn.exec_driver_sql(f"ALTER TABLE {tbl} ADD COLUMN {col} VARCHAR(128)")
+                except OperationalError:
+                    pass

@@ -4,10 +4,17 @@ services:
       context: ./backend
     ports:
       - "127.0.0.1:8002:8000"
+    user: "1000:1000"
     environment:
       GUOWANG_DB_PATH: /app/data/guowang.sqlite3
+      FILES_ROOT: /app/data/requirement
+      WECHAT_APPID: "${WECHAT_APPID}"
+      WECHAT_APPSECRET: "${WECHAT_APPSECRET}"
+      WECHAT_TOKEN: "${WECHAT_TOKEN}"
+      JWT_SECRET: "${JWT_SECRET}"
     volumes:
-      - backend-data:/app/data
+      - ./backend/data:/app/data
+      - .:/app/project
 
   frontend:
     build:
@@ -16,6 +23,3 @@ services:
       - "5174:80"
     depends_on:
       - backend
-
-volumes:
-  backend-data:

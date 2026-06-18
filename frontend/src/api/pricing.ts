@@ -1,5 +1,13 @@
 import axios from 'axios'
 
+axios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('bid_token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
 export interface MethodInfo {
   code: string
   name: string
@@ -58,6 +66,39 @@ export interface CalculateResult {
   debug: Record<string, unknown>
 }
 
+export interface SheetData {
+  name: string
+  rows: BidPayload[]
+  columns: string[]
+}
+
+export interface MultiSheetImportResult {
+  sheets: SheetData[]
+}
+
+export interface SheetResult {
+  name: string
+  method_code: string
+  method_name: string
+  benchmark_price: string
+  discount_rate: string | null
+  bidder_count: number
+  effective_count: number
+  target: {
+    found: boolean
+    score: string | null
+    rank: number | null
+    score_gap: string | null
+    weighted_gap: string | null
+  }
+  rows: ResultRow[]
+  debug: Record<string, unknown>
+}
+
+export interface MultiCalculateResult {
+  results: SheetResult[]
+}
+
 export async function fetchMethods() {
   const { data } = await axios.get<MethodInfo[]>('/api/methods')
   return data
@@ -79,6 +120,27 @@ export async function importXlsx(file: File) {
     columns: string[]
     preview: Record<string, string>[]
   }>('/api/import-xlsx', form)
+  return data
+}
+
+export async function importXlsxMulti(file: File) {
+  const form = new FormData()
+  form.append('file', file)
+  const { data } = await axios.post<MultiSheetImportResult>('/api/import-xlsx-multi', form)
+  return data
+}
+
+export async function calculateMulti(payload: {
+  sheets: Array<{
+    name: string
+    project: ProjectPayload
+    method_code: string
+    params: Record<string, string>
+    bids: BidPayload[]
+    source: string
+  }>
+}) {
+  const { data } = await axios.post<MultiCalculateResult>('/api/calculate-multi', payload)
   return data
 }
 

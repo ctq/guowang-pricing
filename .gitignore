@@ -26,3 +26,4 @@ dist/
 
 # Standalone exported HTML
 tendering-evaluation-system_v*.html
+.env

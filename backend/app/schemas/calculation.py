@@ -92,3 +92,43 @@ class ImportResponse(BaseModel):
     requires_mapping: bool = False
     columns: list[str] = Field(default_factory=list)
     preview: list[dict[str, str]] = Field(default_factory=list)
+
+
+class SheetData(BaseModel):
+    name: str
+    rows: list[BidPayload]
+    columns: list[str] = Field(default_factory=list)
+
+
+class MultiSheetImportResponse(BaseModel):
+    sheets: list[SheetData]
+
+
+class SheetCalculatePayload(BaseModel):
+    name: str
+    project: ProjectPayload
+    method_code: str
+    params: dict[str, str] = Field(default_factory=dict)
+    bids: list[BidPayload]
+    source: str = "manual"
+
+
+class MultiCalculateRequest(BaseModel):
+    sheets: list[SheetCalculatePayload]
+
+
+class SheetResult(BaseModel):
+    name: str
+    method_code: str
+    method_name: str
+    benchmark_price: str
+    discount_rate: str | None
+    bidder_count: int
+    effective_count: int
+    target: TargetResponse
+    rows: list[BidRowResponse]
+    debug: dict[str, Any]
+
+
+class MultiCalculateResponse(BaseModel):
+    results: list[SheetResult]

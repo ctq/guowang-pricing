@@ -5,65 +5,88 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.worksheet.worksheet import Worksheet
 
-from app.schemas.calculation import BidPayload, CalculateRequest, ImportResponse
+from app.schemas.calculation import BidPayload, CalculateRequest, ImportResponse, MultiSheetImportResponse, SheetData, MultiCalculateRequest, MultiCalculateResponse, SheetResult
 
 BIDDER_HEADERS = {"投标人名称", "投标人"}
 PRICE_HEADERS = {"投标价格", "投标价", "报价"}
 MAX_PREVIEW_ROWS = 30
+MAX_SHEETS = 20
 
 
 def _cell_text(value: Any) -> str:
     return "" if value is None else str(value).strip()
 
 
+def _parse_one_sheet(sheet: Worksheet) -> ImportResponse | None:
+    rows = list(sheet.iter_rows(values_only=True))
+    for row_index, row in enumerate(rows[:30]):
+        headers = [_cell_text(value) for value in row]
+        non_empty_headers = [header for header in headers if header]
+        if len(non_empty_headers) < 2:
+            continue
+        bidder_col = next((i for i, header in enumerate(headers) if header in BIDDER_HEADERS), None)
+        price_col = next((i for i, header in enumerate(headers) if header in PRICE_HEADERS), None)
+        if bidder_col is None or price_col is None:
+            preview: list[dict[str, str]] = []
+            for data_row in rows[row_index + 1: row_index + 1 + MAX_PREVIEW_ROWS]:
+                item = {h: _cell_text(data_row[i] if i < len(data_row) else None) for i, h in enumerate(headers) if h}
+                if any(item.values()):
+                    preview.append(item)
+            return ImportResponse(
+                rows=[], mapping={}, warnings=["请手动选择列映射"],
+                requires_mapping=True, columns=non_empty_headers, preview=preview,
+            )
+        bid_rows: list[BidPayload] = []
+        for data_row in rows[row_index + 1:]:
+            bidder = _cell_text(data_row[bidder_col] if bidder_col < len(data_row) else None)
+            price = _cell_text(data_row[price_col] if price_col < len(data_row) else None)
+            if not bidder and not price:
+                continue
+            if bidder:
+                bid_rows.append(BidPayload(bidder_name=bidder, bid_price=price))
+        return ImportResponse(
+            rows=bid_rows, mapping={"bidder_name": headers[bidder_col], "bid_price": headers[price_col]},
+        )
+    return None
+
+
 def import_bids_from_xlsx(content: bytes) -> ImportResponse:
     workbook = load_workbook(BytesIO(content), data_only=True, read_only=True)
-    warnings: list[str] = []
-    first_tabular_preview: ImportResponse | None = None
     for sheet in workbook.worksheets:
-        rows = list(sheet.iter_rows(values_only=True))
-        for row_index, row in enumerate(rows[:30]):
-            headers = [_cell_text(value) for value in row]
-            non_empty_headers = [header for header in headers if header]
-            if len(non_empty_headers) >= 2 and first_tabular_preview is None:
-                preview = []
-                for data_row in rows[row_index + 1 : row_index + 1 + MAX_PREVIEW_ROWS]:
-                    item = {
-                        header: _cell_text(data_row[i] if i < len(data_row) else None)
-                        for i, header in enumerate(headers)
-                        if header
-                    }
-                    if any(item.values()):
-                        preview.append(item)
-                if preview:
-                    first_tabular_preview = ImportResponse(
-                        rows=[],
-                        mapping={},
-                        warnings=["未自动识别投标人列或报价列，请手动选择列映射"],
-                        requires_mapping=True,
-                        columns=non_empty_headers,
-                        preview=preview,
-                    )
-            bidder_col = next((i for i, header in enumerate(headers) if header in BIDDER_HEADERS), None)
-            price_col = next((i for i, header in enumerate(headers) if header in PRICE_HEADERS), None)
-            if bidder_col is None or price_col is None:
-                continue
-            bid_rows: list[BidPayload] = []
-            for data_row in rows[row_index + 1 :]:
-                bidder = _cell_text(data_row[bidder_col] if bidder_col < len(data_row) else None)
-                price = _cell_text(data_row[price_col] if price_col < len(data_row) else None)
-                if not bidder and not price:
-                    continue
-                if bidder:
-                    bid_rows.append(BidPayload(bidder_name=bidder, bid_price=price))
-            return ImportResponse(
-                rows=bid_rows,
-                mapping={"bidder_name": headers[bidder_col], "bid_price": headers[price_col]},
-                warnings=warnings,
-            )
-    if first_tabular_preview is not None:
-        return first_tabular_preview
+        result = _parse_one_sheet(sheet)
+        if result is not None:
+            return result
     raise ValueError("未识别投标人列或报价列，请使用标准表头或手动录入")
+
+
+def import_bids_from_xlsx_multi(content: bytes) -> MultiSheetImportResponse:
+    workbook = load_workbook(BytesIO(content), data_only=True, read_only=True)
+    sheets: list[SheetData] = []
+    for ws in workbook.worksheets:
+        if len(sheets) >= MAX_SHEETS:
+            break
+        result = _parse_one_sheet(ws)
+        if result is not None:
+            sheets.append(SheetData(name=ws.title, rows=result.rows, columns=result.columns))
+    if not sheets:
+        raise ValueError("未识别投标人列或报价列，请使用标准表头或手动录入")
+    return MultiSheetImportResponse(sheets=sheets)
+
+
+def calculate_multi_sheets(payload: MultiCalculateRequest) -> MultiCalculateResponse:
+    from pricing_engine.registry import calculate
+    from app.schemas.mappers import request_to_engine, result_to_response
+
+    results: list[SheetResult] = []
+    for sheet in payload.sheets:
+        engine_req = request_to_engine(CalculateRequest(
+            project=sheet.project, method_code=sheet.method_code,
+            params=sheet.params, bids=sheet.bids, source=sheet.source,
+        ))
+        calc_result = calculate(engine_req)
+        resp = result_to_response(calc_result)
+        results.append(SheetResult(name=sheet.name, **resp.model_dump()))
+    return MultiCalculateResponse(results=results)
 
 
 def _append_pairs(ws: Worksheet, rows: list[tuple[str, Any]]) -> None:
@@ -101,7 +124,7 @@ def export_result(payload: CalculateRequest, result: dict[str, Any]) -> bytes:
             ("目标公司排名", result["target"].get("rank") or ""),
             ("目标公司得分", result["target"].get("score") or ""),
             ("与第一名分差", result["target"].get("score_gap") or ""),
-            ("折算后分差", result["target"].get("weighted_gap") or ""),
+            ("折算后分差", result["target"].get("weighted_gap") if result["target"].get("weighted_gap") is not None else ""),
         ],
     )
 

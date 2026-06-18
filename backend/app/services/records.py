@@ -1,6 +1,8 @@
 import hashlib
 import json
-from datetime import datetime, timedelta
+from datetime import timedelta
+
+from app.utils import now
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -44,9 +46,9 @@ def _ceiling_eq(a: float | None, b: float | None) -> bool:
     return abs(float(a) - float(b)) < 0.000001
 
 
-async def save_summary(db: AsyncSession, payload: CalculateRequest, result: CalculationResult) -> None:
+async def save_summary(db: AsyncSession, payload: CalculateRequest, result: CalculationResult, openid: str | None = None) -> None:
     digest = param_hash(payload)
-    ten_minutes_ago = datetime.utcnow() - timedelta(minutes=10)
+    ten_minutes_ago = now() - timedelta(minutes=10)
     bm = float(result.benchmark_price)
     cp = float(payload.project.ceiling_price) if payload.project.ceiling_price is not None else None
 
@@ -57,8 +59,10 @@ async def save_summary(db: AsyncSession, payload: CalculateRequest, result: Calc
     )
     existing = (await db.execute(exact_stmt)).scalars().first()
     if existing is not None:
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = now()
         existing.use_count += 1
+        if openid and not existing.openid:
+            existing.openid = openid
         await db.commit()
         return
 
@@ -72,8 +76,10 @@ async def save_summary(db: AsyncSession, payload: CalculateRequest, result: Calc
             continue
         if abs(float(record.benchmark_price) - bm) >= 0.000001:
             continue
-        record.updated_at = datetime.utcnow()
+        record.updated_at = now()
         record.use_count += 1
+        if openid and not record.openid:
+            record.openid = openid
         await db.commit()
         return
 
@@ -88,6 +94,7 @@ async def save_summary(db: AsyncSession, payload: CalculateRequest, result: Calc
             effective_count=result.effective_count,
             param_hash=digest,
             source=payload.source,
+            openid=openid,
         )
     )
     await db.commit()
@@ -97,6 +104,7 @@ async def save_calculation_log(
     db: AsyncSession,
     payload: CalculateRequest,
     status: str,
+    openid: str | None = None,
     result: CalculationResult | None = None,
     error_message: str | None = None,
 ) -> None:
@@ -114,6 +122,7 @@ async def save_calculation_log(
             error_message=error_message,
             request_json=request_log_json(payload),
             result_json=result_log_json(result),
+            openid=openid,
         )
     )
     await db.commit()

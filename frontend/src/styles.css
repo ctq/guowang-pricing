@@ -90,6 +90,62 @@ select {
   line-height: 80px;
 }
 
+/* 顶部导航 */
+.app-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid rgba(255,255,255,0.3);
+  background: transparent;
+  color: rgba(255,255,255,0.8);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.nav-btn:hover {
+  background: rgba(255,255,255,0.1);
+  color: #ffffff;
+}
+
+.nav-btn.active {
+  background: #ffffff;
+  color: var(--sg-green);
+  border-color: #ffffff;
+}
+
+.login-btn {
+  border-color: rgba(255,255,255,0.6);
+  color: #ffffff;
+}
+
+.login-btn:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+.nav-btn.logged-in {
+  cursor: pointer;
+  color: rgba(255,255,255,0.9);
+}
+
+/* 页面内容容器（需求文档等全宽页面） */
+.page-content {
+  flex: 1;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px;
+}
+
 .workspace {
   flex: 1;
   display: grid;

@@ -4,12 +4,22 @@
  * 提供项目参数录入、开标记录导入/粘贴、评分测算与结果展示等功能。
  */
 import { computed, onMounted, ref, watch } from 'vue'
-import { DataLine, Download, Finished, Plus, Refresh, Upload } from '@element-plus/icons-vue'
+import { DataLine, Document, Download, Finished, Plus, Refresh, Upload, User, Grid } from '@element-plus/icons-vue'
 import { ElMessage, type UploadProps } from 'element-plus'
 import { calculate, exportXlsx, fetchMethods, importXlsx } from './api/pricing'
+import { useAuthStore } from './stores/auth'
 import { useCalculatorStore } from './stores/calculator'
+import LoginPage from './pages/LoginPage.vue'
+import RequirementsPage from './pages/RequirementsPage.vue'
+import MultiSheetCalculator from './components/MultiSheetCalculator.vue'
 
+const authStore = useAuthStore()
 const store = useCalculatorStore()
+
+const loginOpen = ref(false)
+
+// 页面切换
+const currentPage = ref<'calculator' | 'multi-sheet' | 'requirements'>('calculator')
 
 // 界面状态
 const loading = ref(false)          // 测算请求加载中
@@ -223,12 +233,31 @@ function applyPastedRows() {
   ElMessage.success(`已粘贴 ${rows.length} 条报价`)
 }
 
+const MAX_FREE_USES = 5
+const FREE_USE_KEY = 'bid_free_uses'
+
+function getFreeUseCount(): number {
+  return Number(localStorage.getItem(FREE_USE_KEY) || '0')
+}
+
+function incrementFreeUse() {
+  localStorage.setItem(FREE_USE_KEY, String(getFreeUseCount() + 1))
+}
+
 /** 发起测算请求 */
 async function runCalculate(source = 'manual') {
   if (!validateBeforeCalculate()) return
+  if (!authStore.loggedIn && getFreeUseCount() >= MAX_FREE_USES) {
+    ElMessage.warning(`试用已用完（${MAX_FREE_USES}次），请登录后继续使用`)
+    loginOpen.value = true
+    return
+  }
   loading.value = true
   try {
     store.result = await calculate(payloadWithFloatingType(source))
+    if (!authStore.loggedIn) {
+      incrementFreeUse()
+    }
     ElMessage.success('计算成功')
   } catch (error) {
     ElMessage.error((error as { response?: { data?: { detail?: string } } }).response?.data?.detail ?? '计算失败')
@@ -286,8 +315,44 @@ function rowClassName({ row }: { row: any }) {
     <header class="app-header">
       <span class="app-title">电算宝</span>
       <span class="app-slogan">一键测算报价得分</span>
+      <nav class="app-nav">
+        <button
+          class="nav-btn"
+          :class="{ active: currentPage === 'calculator' }"
+          @click="currentPage = 'calculator'"
+        >
+          <el-icon><DataLine /></el-icon>测算
+        </button>
+        <button
+          class="nav-btn"
+          :class="{ active: currentPage === 'multi-sheet' }"
+          @click="currentPage = 'multi-sheet'"
+        >
+          <el-icon><Grid /></el-icon>多表
+        </button>
+        <button
+          class="nav-btn"
+          :class="{ active: currentPage === 'requirements' }"
+          @click="currentPage = 'requirements'"
+        >
+          <el-icon><Document /></el-icon>需求
+        </button>
+        <button
+          v-if="!authStore.loggedIn"
+          class="nav-btn login-btn"
+          @click="loginOpen = true"
+        >
+          <el-icon><User /></el-icon>登录
+        </button>
+        <span v-else class="nav-btn logged-in" @click="authStore.logout()">
+          <el-icon><User /></el-icon>已登录
+        </span>
+      </nav>
     </header>
-    <div class="workspace">
+    <LoginPage v-if="loginOpen" @close="loginOpen = false" />
+    <RequirementsPage v-if="currentPage === 'requirements'" class="page-content" />
+    <MultiSheetCalculator v-else-if="currentPage === 'multi-sheet'" class="page-content" />
+    <div v-else class="workspace">
       <!-- 左侧：评标参数面板 -->
       <aside class="wire-panel params-panel">
         <h1>评标参数</h1>

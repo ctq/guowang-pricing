@@ -50,8 +50,8 @@ def result_to_response(result: CalculationResult) -> CalculateResponse:
             found=result.target.found,
             score=dec_to_str(result.target.score, 4),
             rank=result.target.rank,
-            score_gap=dec_to_str(result.target.score_gap, 4),
-            weighted_gap=dec_to_str(result.target.weighted_gap, 4),
+            score_gap=dec_to_str(result.target.score_gap, 5),
+            weighted_gap=dec_to_str(result.target.weighted_gap, 5),
         ),
         rows=[
             BidRowResponse(
